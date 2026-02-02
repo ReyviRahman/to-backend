@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/ReyviRahman/to-backend/internal/models"
+	"github.com/go-chi/chi/v5"
 )
 
 // internal/handler/questions.go (atau di mana kamu mendefinisikan payload)
@@ -89,6 +92,81 @@ func (app *application) getQuestionHandler(w http.ResponseWriter, r *http.Reques
 
 	err = app.jsonResponse(w, http.StatusOK, "Berhasil Mendapatkan Data", questions)
 	if err != nil {
+		app.internalServerError(w, r, err)
+	}
+}
+
+func (app *application) updateQuestionHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		app.badRequestResponse(w, r, errors.New("ID tidak valid"))
+		return
+	}
+
+	var payload CreateQuestionPayload
+	if err := readJSON(w, r, &payload); err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if err := Validate.Struct(payload); err != nil {
+		app.validationErrorResponse(w, r, err)
+		return
+	}
+
+	options := make(models.QuestionOptions, len(payload.Options))
+	for i, opt := range payload.Options {
+		options[i] = models.Option{
+			Code:  opt.Code,
+			Text:  opt.Text,
+			Score: opt.Score,
+		}
+	}
+
+	question := &models.Question{
+		ID:           id,
+		Category:     payload.Category,
+		QuestionText: payload.QuestionText,
+		Options:      options,
+		Explanation:  payload.Explanation,
+	}
+
+	ctx := r.Context()
+	if err := app.store.Questions.Update(ctx, question); err != nil {
+		if err.Error() == "data tidak ditemukan" {
+			app.notFoundResponse(w, r, err)
+			return
+		}
+		app.internalServerError(w, r, err)
+		return
+	}
+
+	if err := app.jsonResponse(w, http.StatusOK, "Question Update successfully", question); err != nil {
+		app.internalServerError(w, r, err)
+	}
+
+}
+
+func (app *application) deleteQuestionHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		app.badRequestResponse(w, r, errors.New("ID tidak valid"))
+		return
+	}
+
+	ctx := r.Context()
+	if err := app.store.Questions.Delete(ctx, id); err != nil {
+		if err.Error() == "data tidak ditemukan" {
+			app.notFoundResponse(w, r, err)
+			return
+		}
+		app.internalServerError(w, r, err)
+		return
+	}
+
+	if err := app.jsonResponse(w, http.StatusOK, "Question deleted successfully", nil); err != nil {
 		app.internalServerError(w, r, err)
 	}
 }

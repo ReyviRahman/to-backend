@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/ReyviRahman/to-backend/internal/models"
@@ -10,6 +11,26 @@ import (
 
 type QuestionStore struct {
 	db *sql.DB
+}
+
+func (s *QuestionStore) Create(ctx context.Context, question *models.Question) error {
+	query := `
+		INSERT INTO questions (category, question_text, options, explanation)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, created_at, updated_at
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	err := s.db.QueryRowContext(ctx, query,
+		question.Category,
+		question.QuestionText,
+		question.Options,
+		question.Explanation,
+	).Scan(&question.ID, &question.CreatedAt, &question.UpdatedAt)
+
+	return err
 }
 
 func (s *QuestionStore) GetQuestions(ctx context.Context) ([]models.Question, error) {
@@ -53,19 +74,56 @@ func (s *QuestionStore) GetQuestions(ctx context.Context) ([]models.Question, er
 	return questions, nil
 }
 
-func (s *QuestionStore) Create(ctx context.Context, question *models.Question) error {
+func (s *QuestionStore) Update(ctx context.Context, question *models.Question) error {
 	query := `
-		INSERT INTO questions (category, question_text, options, explanation)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, created_at, updated_at
+		UPDATE questions
+		SET category = $1, question_text = $2, options = $3, explanation = $4, updated_at = NOW()
+		WHERE id = $5
+		RETURNING updated_at
 	`
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
 
 	err := s.db.QueryRowContext(ctx, query,
 		question.Category,
 		question.QuestionText,
 		question.Options,
 		question.Explanation,
-	).Scan(&question.ID, &question.CreatedAt, &question.UpdatedAt)
+		question.ID,
+	).Scan(&question.UpdatedAt)
 
-	return err
+	if err != nil {
+		switch {
+		case err == sql.ErrNoRows:
+			return errors.New("data tidak ditemukan")
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *QuestionStore) Delete(ctx context.Context, id int64) error {
+	query := `DELETE FROM questions WHERE id = $1`
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	res, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errors.New("data tidak ditemukan")
+	}
+
+	return nil
 }

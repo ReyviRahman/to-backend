@@ -43,6 +43,10 @@ func (app *application) mount() http.Handler {
 	r.Route("/questions", func(r chi.Router) {
 		r.Post("/", app.createQuestionHandler)
 		r.Get("/", app.getQuestionHandler)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Put("/", app.updateQuestionHandler)
+			r.Delete("/", app.deleteQuestionHandler)
+		})
 	})
 
 	return r
