@@ -5,8 +5,10 @@ import (
 )
 
 func (app *application) internalServerError(w http.ResponseWriter, r *http.Request, err error) {
+	// Log yang sangat detail untuk developer
 	app.logger.Errorw("internal error", "method", r.Method, "path", r.URL.Path, "error", err.Error())
 
+	// Pesan yang sangat aman untuk user
 	writeJSONError(w, http.StatusInternalServerError, "the server encountered a problem")
 }
 
@@ -17,7 +19,7 @@ func (app *application) forbiddenResponse(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, err error) {
-	app.logger.Warnf("bad request", "method", r.Method, "path", r.URL.Path, "error", err.Error())
+	app.logger.Warnw("bad request", "method", r.Method, "path", r.URL.Path, "error", err.Error())
 
 	writeJSONError(w, http.StatusBadRequest, err.Error())
 }
@@ -54,4 +56,13 @@ func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http
 	w.Header().Set("Retry-After", retryAfter)
 
 	writeJSONError(w, http.StatusTooManyRequests, "rate limit exceeded, retry after: "+retryAfter)
+}
+
+func (app *application) validationErrorResponse(w http.ResponseWriter, r *http.Request, err error) {
+	app.logger.Warnw("validation error", "method", r.Method, "path", r.URL.Path, "error", err.Error())
+
+	errors := app.parseValidationError(err)
+
+	// Kita kirim map-nya langsung ke user
+	writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": errors})
 }

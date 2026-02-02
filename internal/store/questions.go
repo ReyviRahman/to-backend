@@ -15,7 +15,7 @@ func (s *QuestionStore) Create(ctx context.Context, question *models.Question) e
 	query := `
 		INSERT INTO questions (category, question_text, options, explanation)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id
+		RETURNING id, created_at, updated_at
 	`
 
 	err := s.db.QueryRowContext(ctx, query,
@@ -23,7 +23,7 @@ func (s *QuestionStore) Create(ctx context.Context, question *models.Question) e
 		question.QuestionText,
 		question.Options,
 		question.Explanation,
-	).Scan(&question.ID)
+	).Scan(&question.ID, &question.CreatedAt, &question.UpdatedAt)
 
 	return err
 }
