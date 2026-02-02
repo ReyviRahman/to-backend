@@ -78,3 +78,17 @@ func (app *application) createQuestionHandler(w http.ResponseWriter, r *http.Req
 		app.internalServerError(w, r, err)
 	}
 }
+
+func (app *application) getQuestionHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	questions, err := app.store.Questions.GetQuestions(ctx)
+	if err != nil {
+		app.internalServerError(w, r, err)
+	}
+
+	err = app.jsonResponse(w, http.StatusOK, "Berhasil Mendapatkan Data", questions)
+	if err != nil {
+		app.internalServerError(w, r, err)
+	}
+}

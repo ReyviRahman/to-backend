@@ -10,6 +10,7 @@ import (
 type Storage struct {
 	Questions interface {
 		Create(ctx context.Context, question *models.Question) error
+		GetQuestions(ctx context.Context) ([]models.Question, error)
 	}
 }
 
