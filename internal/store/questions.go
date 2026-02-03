@@ -33,19 +33,40 @@ func (s *QuestionStore) Create(ctx context.Context, question *models.Question) e
 	return err
 }
 
-func (s *QuestionStore) GetQuestions(ctx context.Context) ([]models.Question, error) {
-	query := `
-		SELECT id, category, question_text, options, explanation, created_at, updated_at
-		FROM questions
-		ORDER BY created_at DESC
-	`
+type MetaData struct {
+	CurrentPage int `json:"current_page"`
+	Limit       int `json:"limit"`
+	TotalItems  int `json:"total_items"`
+	TotalPages  int `json:"total_pages"`
+}
 
+func (s *QuestionStore) GetQuestions(ctx context.Context, qq PaginatedQuestionQuery) ([]models.Question, MetaData, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query)
+	// 1. Query Pertama: Hitung Total Data (Tanpa Limit/Offset)
+	var totalItems int
+	countQuery := `SELECT COUNT(id) FROM questions`
+
+	// Jika nanti ada filter (misal WHERE category = 'TIU'),
+	// pastikan countQuery juga pakai WHERE yang sama.
+	err := s.db.QueryRowContext(ctx, countQuery).Scan(&totalItems)
 	if err != nil {
-		return nil, err
+		return nil, MetaData{}, err
+	}
+
+	// 2. Query Kedua: Ambil Data Sebenarnya (Pakai Limit/Offset)
+	query := `
+        SELECT id, category, question_text, options, explanation, created_at, updated_at
+        FROM questions
+				WHERE ($1 = '' OR question_text ILIKE '%' || $1 || '%')
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+    `
+
+	rows, err := s.db.QueryContext(ctx, query, qq.Search, qq.Limit, qq.Offset)
+	if err != nil {
+		return nil, MetaData{}, err
 	}
 	defer rows.Close()
 
@@ -62,16 +83,36 @@ func (s *QuestionStore) GetQuestions(ctx context.Context) ([]models.Question, er
 			&q.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, MetaData{}, err
 		}
 		questions = append(questions, q)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, MetaData{}, err
 	}
 
-	return questions, nil
+	// 3. Hitung Kalkulasi Metadata
+	totalPages := 0
+	if qq.Limit > 0 {
+		// Rumus total page: ceil(totalItems / limit)
+		// Cara integer di Go: (total + limit - 1) / limit
+		totalPages = (totalItems + qq.Limit - 1) / qq.Limit
+	}
+
+	currentPage := 1
+	if qq.Limit > 0 {
+		currentPage = (qq.Offset / qq.Limit) + 1
+	}
+
+	meta := MetaData{
+		CurrentPage: currentPage,
+		Limit:       qq.Limit,
+		TotalItems:  totalItems,
+		TotalPages:  totalPages,
+	}
+
+	return questions, meta, nil
 }
 
 func (s *QuestionStore) Update(ctx context.Context, question *models.Question) error {

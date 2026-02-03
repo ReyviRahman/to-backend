@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ReyviRahman/to-backend/internal/models"
+	"github.com/ReyviRahman/to-backend/internal/store"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -83,14 +84,30 @@ func (app *application) createQuestionHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (app *application) getQuestionHandler(w http.ResponseWriter, r *http.Request) {
+	qq := store.PaginatedQuestionQuery{
+		Limit:  20,
+		Offset: 0,
+	}
+
+	qq, err := qq.Parse(r)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if err := Validate.Struct(qq); err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
 	ctx := r.Context()
 
-	questions, err := app.store.Questions.GetQuestions(ctx)
+	questions, meta, err := app.store.Questions.GetQuestions(ctx, qq)
 	if err != nil {
 		app.internalServerError(w, r, err)
 	}
 
-	err = app.jsonResponse(w, http.StatusOK, "Berhasil Mendapatkan Data", questions)
+	err = app.jsonResponse(w, http.StatusOK, "Berhasil Mendapatkan Data", questions, meta)
 	if err != nil {
 		app.internalServerError(w, r, err)
 	}

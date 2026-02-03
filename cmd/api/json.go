@@ -93,14 +93,23 @@ func writeJSONError(w http.ResponseWriter, status int, message string) error {
 	return writeJSON(w, status, &envelope{Error: message})
 }
 
-func (app *application) jsonResponse(w http.ResponseWriter, status int, message string, data any) error {
-	// Gunakan struct anonim agar urutan konsisten: message dulu baru data
+// Tambahkan parameter 'headers ...any' di akhir
+func (app *application) jsonResponse(w http.ResponseWriter, status int, message string, data any, meta ...any) error {
+
+	// Kita buat struct baru yang punya field Meta dengan tag "omitempty"
+	// omitempty artinya: kalau nil, field ini gak bakal muncul di JSON
 	env := struct {
 		Message string `json:"message"`
 		Data    any    `json:"data"`
+		Meta    any    `json:"meta,omitempty"`
 	}{
 		Message: message,
 		Data:    data,
+	}
+
+	// Cek apakah ada parameter meta yang dikirim?
+	if len(meta) > 0 {
+		env.Meta = meta[0]
 	}
 
 	return writeJSON(w, status, env)
